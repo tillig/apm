@@ -176,7 +176,12 @@ def _resolve_scope_deps(apm_dir, logger, insecure_only=False):
                 version = package.version or 'unknown'
             primitives = _count_primitives(candidate)
 
-            is_orphaned = org_repo_name not in declared_sources
+            is_orphaned = (
+                org_repo_name not in declared_sources
+                and not any(
+                    k.startswith(org_repo_name + "/") for k in declared_sources
+                )
+            )
             if is_orphaned:
                 orphaned_packages.append(org_repo_name)
 

@@ -57,7 +57,11 @@ def prune(ctx, dry_run):
             sys.exit(1)
 
         installed_packages = _scan_installed_packages(apm_modules_dir)
-        orphaned_packages = [p for p in installed_packages if p not in expected_installed]
+        orphaned_packages = [
+            p for p in installed_packages
+            if p not in expected_installed
+            and not any(e.startswith(p + "/") for e in expected_installed)
+        ]
 
         if not orphaned_packages:
             logger.success("No orphaned packages found. apm_modules/ is clean.", symbol="check")

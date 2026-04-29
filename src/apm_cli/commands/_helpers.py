@@ -209,7 +209,11 @@ def _check_orphaned_packages():
             return []
 
         installed = _scan_installed_packages(apm_modules_dir)
-        return [p for p in installed if p not in expected]
+        return [
+            p for p in installed
+            if p not in expected
+            and not any(e.startswith(p + "/") for e in expected)
+        ]
     except Exception:
         return []
 

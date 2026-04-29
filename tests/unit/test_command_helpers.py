@@ -15,7 +15,9 @@ import yaml
 
 from apm_cli.commands._helpers import (
     _atomic_write,
+    _build_expected_install_paths,
     _check_and_notify_updates,
+    _check_orphaned_packages,
     _get_default_script,
     _list_available_scripts,
     _load_apm_config,
@@ -250,6 +252,77 @@ class TestScanInstalledPackages:
         (tmp_path / "apm_modules").mkdir()
         result = _scan_installed_packages(tmp_path / "apm_modules")
         assert result == []
+
+
+# ---------------------------------------------------------------------------
+# _check_orphaned_packages — subdirectory ancestor false-positive fix
+# ---------------------------------------------------------------------------
+
+
+class TestCheckOrphanedPackagesSubdirectoryAncestor:
+    """Tests that parent directories of subdirectory virtual packages are not
+    falsely flagged as orphaned.
+
+    When a subdirectory package is installed at owner/repo/.apm/skills/name,
+    the intermediate owner/repo/ directory contains .apm/ and gets picked up
+    by _scan_installed_packages. The orphan check must recognise it as an
+    ancestor of an expected path rather than an orphaned package.
+    """
+
+    def test_parent_of_subdirectory_package_not_orphaned(self, tmp_path, monkeypatch):
+        """owner/repo is not orphaned when owner/repo/.apm/skills/x is expected."""
+        monkeypatch.chdir(tmp_path)
+
+        # Set up apm.yml with a dict-form dependency using git: + path:
+        apm_yml = tmp_path / "apm.yml"
+        apm_yml.write_text(
+            "name: test\n"
+            "version: 1.0.0\n"
+            "dependencies:\n"
+            "  apm:\n"
+            "    - git: github.example.com/owner/repo\n"
+            "      path: .apm/skills/my-skill\n",
+            encoding="utf-8",
+        )
+
+        # Simulate the on-disk layout: owner/repo/.apm/skills/my-skill/SKILL.md
+        apm_modules = tmp_path / "apm_modules"
+        skill_dir = apm_modules / "owner" / "repo" / ".apm" / "skills" / "my-skill"
+        skill_dir.mkdir(parents=True)
+        (skill_dir / "SKILL.md").write_text("# Skill")
+
+        orphaned = _check_orphaned_packages()
+        assert orphaned == [], (
+            f"Parent dir should not be orphaned; got: {orphaned}"
+        )
+
+    def test_actual_orphan_still_detected(self, tmp_path, monkeypatch):
+        """A truly orphaned package is still reported even with the ancestor fix."""
+        monkeypatch.chdir(tmp_path)
+
+        apm_yml = tmp_path / "apm.yml"
+        apm_yml.write_text(
+            "name: test\n"
+            "version: 1.0.0\n"
+            "dependencies:\n"
+            "  apm:\n"
+            "    - git: github.example.com/owner/repo\n"
+            "      path: .apm/skills/my-skill\n",
+            encoding="utf-8",
+        )
+
+        # Simulate an additional unrelated package that IS orphaned
+        apm_modules = tmp_path / "apm_modules"
+        skill_dir = apm_modules / "owner" / "repo" / ".apm" / "skills" / "my-skill"
+        skill_dir.mkdir(parents=True)
+        (skill_dir / "SKILL.md").write_text("# Skill")
+
+        orphan_dir = apm_modules / "other" / "stale-pkg"
+        orphan_dir.mkdir(parents=True)
+        (orphan_dir / "apm.yml").write_text("name: stale-pkg")
+
+        orphaned = _check_orphaned_packages()
+        assert "other/stale-pkg" in orphaned
 
 
 # ---------------------------------------------------------------------------
