@@ -231,9 +231,15 @@ class ClaudeFormatter:
                     continue
 
                 claude_md_path = package_dir / "CLAUDE.md"
-                if not claude_md_path.is_file():
+                if claude_md_path.is_symlink() or not claude_md_path.is_file():
                     continue
 
+                try:
+                    resolved_package_dir = package_dir.resolve()
+                    resolved_claude_md_path = claude_md_path.resolve()
+                    resolved_claude_md_path.relative_to(resolved_package_dir)
+                except (OSError, ValueError):
+                    continue
                 # Build the @import path
                 import_path = f"@apm_modules/{owner_dir.name}/{package_dir.name}/CLAUDE.md"
                 dependencies.append(import_path)
