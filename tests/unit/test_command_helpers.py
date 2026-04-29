@@ -15,7 +15,6 @@ import yaml
 
 from apm_cli.commands._helpers import (
     _atomic_write,
-    _build_expected_install_paths,
     _check_and_notify_updates,
     _check_orphaned_packages,
     _get_default_script,
