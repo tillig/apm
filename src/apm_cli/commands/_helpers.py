@@ -7,6 +7,7 @@ import builtins
 import os
 import sys
 import tempfile
+from collections.abc import Iterable
 from pathlib import Path
 
 import click
@@ -156,7 +157,7 @@ def _build_expected_install_paths(declared_deps, lockfile, apm_modules_dir: Path
     return expected
 
 
-def _expand_with_ancestors(paths) -> set:
+def _expand_with_ancestors(paths: Iterable[str]) -> set:
     """Expand a set of paths to include all ancestor prefixes.
 
     Given {"owner/repo/.apm/skills/my-skill"}, returns a set containing both
