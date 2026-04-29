@@ -17,6 +17,7 @@ from apm_cli.commands._helpers import (
     _atomic_write,
     _check_and_notify_updates,
     _check_orphaned_packages,
+    _expand_with_ancestors,
     _get_default_script,
     _list_available_scripts,
     _load_apm_config,
@@ -251,6 +252,41 @@ class TestScanInstalledPackages:
         (tmp_path / "apm_modules").mkdir()
         result = _scan_installed_packages(tmp_path / "apm_modules")
         assert result == []
+
+
+# ---------------------------------------------------------------------------
+# _expand_with_ancestors
+# ---------------------------------------------------------------------------
+
+
+class TestExpandWithAncestors:
+    """Tests for _expand_with_ancestors."""
+
+    def test_adds_intermediate_ancestors(self):
+        """Subdirectory path produces 2-segment ancestor prefix."""
+        paths = {"owner/repo/.apm/skills/my-skill"}
+        result = _expand_with_ancestors(paths)
+        assert "owner/repo" in result
+        assert "owner/repo/.apm" in result
+        assert "owner/repo/.apm/skills" in result
+        assert "owner/repo/.apm/skills/my-skill" in result
+
+    def test_two_segment_path_unchanged(self):
+        """A 2-segment path has no intermediate ancestors to add."""
+        paths = {"owner/repo"}
+        result = _expand_with_ancestors(paths)
+        assert result == {"owner/repo"}
+
+    def test_empty_input(self):
+        """Empty set returns empty set."""
+        assert _expand_with_ancestors(set()) == set()
+
+    def test_no_false_prefix_overlap(self):
+        """owner/repo-extra does not collide with owner/repo."""
+        paths = {"owner/repo-extra/.apm/skills/x"}
+        result = _expand_with_ancestors(paths)
+        assert "owner/repo-extra" in result
+        assert "owner/repo" not in result
 
 
 # ---------------------------------------------------------------------------

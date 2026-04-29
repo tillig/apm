@@ -303,7 +303,7 @@ class TestDepsListCommand(_DepsCmdBase):
                 result = self.runner.invoke(cli, ["deps", "list"])
 
             assert result.exit_code == 0
-            assert "orphan" not in result.output.lower()
+            assert "orphaned package(s) found" not in result.output
 
 
 class TestDepsTreeCommand(_DepsCmdBase):

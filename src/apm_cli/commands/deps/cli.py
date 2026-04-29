@@ -21,6 +21,7 @@ from ._utils import (
     _get_package_display_info,
     _get_detailed_package_info,
 )
+from .._helpers import _expand_with_ancestors
 
 
 # ---------------------------------------------------------------------------
@@ -143,6 +144,9 @@ def _resolve_scope_deps(apm_dir, logger, insecure_only=False):
     except Exception:
         pass  # Continue without lockfile if it can't be read
 
+    # Precompute expected paths + ancestors for O(1) orphan checks
+    declared_with_ancestors = _expand_with_ancestors(declared_sources.keys())
+
     # Scan for installed packages in org-namespaced structure
     # Walks the tree to find directories containing apm.yml or SKILL.md,
     # handling GitHub (2-level), ADO (3-level), and subdirectory (4+ level) packages.
@@ -176,12 +180,7 @@ def _resolve_scope_deps(apm_dir, logger, insecure_only=False):
                 version = package.version or 'unknown'
             primitives = _count_primitives(candidate)
 
-            is_orphaned = (
-                org_repo_name not in declared_sources
-                and not any(
-                    k.startswith(org_repo_name + "/") for k in declared_sources
-                )
-            )
+            is_orphaned = org_repo_name not in declared_with_ancestors
             if is_orphaned:
                 orphaned_packages.append(org_repo_name)
 

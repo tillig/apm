@@ -156,6 +156,22 @@ def _build_expected_install_paths(declared_deps, lockfile, apm_modules_dir: Path
     return expected
 
 
+def _expand_with_ancestors(paths) -> set:
+    """Expand a set of paths to include all ancestor prefixes.
+
+    Given {"owner/repo/.apm/skills/my-skill"}, returns a set containing both
+    the original path and "owner/repo" (all intermediate path prefixes with
+    2+ segments). This allows O(1) membership checks when determining whether
+    a scanned directory is an ancestor of an expected package path.
+    """
+    expanded = builtins.set(paths)
+    for p in paths:
+        parts = p.split("/")
+        for i in range(2, len(parts)):
+            expanded.add("/".join(parts[:i]))
+    return expanded
+
+
 def _scan_installed_packages(apm_modules_dir: Path) -> list:
     """Scan *apm_modules_dir* for installed package paths.
 
@@ -209,11 +225,8 @@ def _check_orphaned_packages():
             return []
 
         installed = _scan_installed_packages(apm_modules_dir)
-        return [
-            p for p in installed
-            if p not in expected
-            and not any(e.startswith(p + "/") for e in expected)
-        ]
+        expected_with_ancestors = _expand_with_ancestors(expected)
+        return [p for p in installed if p not in expected_with_ancestors]
     except Exception:
         return []
 
