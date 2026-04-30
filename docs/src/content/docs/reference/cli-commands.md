@@ -1736,13 +1736,13 @@ apm compile --watch
 apm compile --watch --dry-run
 
 # Target specific agent formats
-apm compile --target vscode    # AGENTS.md + .github/ only
+apm compile --target vscode    # AGENTS.md + .github/copilot-instructions.md + .github/ only
 apm compile --target claude    # CLAUDE.md + .claude/ only
 apm compile --target opencode  # AGENTS.md + .opencode/ only
 apm compile --target all       # All formats (default)
 
 # Multiple targets (comma-separated)
-apm compile -t claude,copilot  # Both CLAUDE.md and AGENTS.md
+apm compile -t claude,copilot  # CLAUDE.md + AGENTS.md + .github/copilot-instructions.md
 
 # Compile injecting Spec Kit constitution (auto-detected)
 apm compile --with-constitution
@@ -1766,6 +1766,9 @@ apm compile --no-constitution
 
 **Content Scanning:**
 Compiled output is scanned for hidden Unicode characters before writing to disk. Critical findings cause `apm compile` to exit with code 1 — defense-in-depth since source files are already scanned during `apm install`.
+
+**`.github/copilot-instructions.md` generation:**
+When the resolved target includes `copilot` (i.e. `vscode`, `copilot`, `agents`, `all`, or any multi-target list containing one of these), `apm compile` assembles all *global* instructions (entries in `.apm/instructions/` without an `apply_to` field) into `.github/copilot-instructions.md` -- the file VS Code and GitHub Copilot read automatically with zero user configuration. Generated content is wrapped with an APM-only marker. Switching to a non-Copilot target (e.g. `apm compile -t claude`) cleans up the file only when the marker is present; a hand-authored `.github/copilot-instructions.md` is left untouched on both write and cleanup paths.
 
 **Configuration Integration:**
 The compile command supports configuration via `apm.yml`:

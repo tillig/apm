@@ -196,15 +196,18 @@ def should_compile_gemini_md(target: CompileTargetType) -> bool:
     return target in ("gemini", "all")
 
 
-def should_compile_copilot_instructions_md(target: TargetType) -> bool:
+def should_compile_copilot_instructions_md(target: CompileTargetType) -> bool:
     """Check if .github/copilot-instructions.md should be compiled.
 
     Args:
-        target: The detected or configured target
+        target: The detected or configured target. May be a string or a
+            frozenset of compiler families for multi-target lists.
 
     Returns:
         bool: True if Copilot root instructions should be generated
     """
+    if isinstance(target, frozenset):
+        return "agents" in target
     return target in ("vscode", "all")
 
 

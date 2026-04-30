@@ -261,6 +261,15 @@ class TestShouldCompileCopilotInstructionsMd:
     def test_claude_target(self):
         assert should_compile_copilot_instructions_md("claude") is False
 
+    def test_frozenset_with_agents_returns_true(self):
+        """Multi-target lists containing 'agents' (e.g. -t claude,copilot) must emit."""
+        assert should_compile_copilot_instructions_md(frozenset({"agents", "claude"})) is True
+
+    def test_frozenset_without_agents_returns_false(self):
+        """Multi-target lists without 'agents' must not emit copilot-instructions.md."""
+        assert should_compile_copilot_instructions_md(frozenset({"claude", "gemini"})) is False
+        assert should_compile_copilot_instructions_md(frozenset({"claude"})) is False
+
 
 class TestGetTargetDescription:
     """Tests for get_target_description function."""
