@@ -294,8 +294,12 @@ class TestDepsListCommand(_DepsCmdBase):
                 encoding="utf-8",
             )
 
-            # Simulate installed layout: owner/repo/.apm/skills/my-skill/SKILL.md
-            skill_dir = tmp / "apm_modules" / "owner" / "repo" / ".apm" / "skills" / "my-skill"
+            # Simulate installed layout: owner/repo/ with apm.yml (so deps list
+            # scans it as a package) plus the nested skill content.
+            repo_dir = tmp / "apm_modules" / "owner" / "repo"
+            repo_dir.mkdir(parents=True)
+            (repo_dir / "apm.yml").write_text("name: repo\nversion: 1.0.0\n", encoding="utf-8")
+            skill_dir = repo_dir / ".apm" / "skills" / "my-skill"
             skill_dir.mkdir(parents=True)
             (skill_dir / "SKILL.md").write_text("# Skill", encoding="utf-8")
 
