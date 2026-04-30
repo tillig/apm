@@ -260,13 +260,20 @@ class TestExpandWithAncestors:
     """Tests for _expand_with_ancestors."""
 
     def test_adds_intermediate_ancestors(self):
-        """Subdirectory path produces 2-segment ancestor prefix."""
+        """Subdirectory path produces install-root ancestors only.
+
+        Depth-cap security contract: ancestors past depth 3 are NOT
+        emitted (see _expand_with_ancestors docstring). For a path
+        like ``owner/repo/.apm/skills/my-skill`` only the 2-segment
+        and 3-segment prefixes are added.
+        """
         paths = {"owner/repo/.apm/skills/my-skill"}
         result = _expand_with_ancestors(paths)
         assert "owner/repo" in result
         assert "owner/repo/.apm" in result
-        assert "owner/repo/.apm/skills" in result
         assert "owner/repo/.apm/skills/my-skill" in result
+        # Depth cap: deeper ancestors are intentionally not emitted.
+        assert "owner/repo/.apm/skills" not in result
 
     def test_two_segment_path_unchanged(self):
         """A 2-segment path has no intermediate ancestors to add."""
@@ -299,6 +306,50 @@ class TestExpandWithAncestors:
         # Original path is kept (it's in the input set), but no ancestors are generated
         assert "owner/../etc/passwd" in result
         assert "owner/.." not in result
+
+    def test_skips_backslash_traversal(self):
+        """Backslash-encoded traversal cannot bypass the '..' guard.
+
+        Regression for the supply-chain finding: prior implementation
+        called ``p.split('/')`` directly, so a token like
+        ``owner\\..\\evil/sub`` parsed as a single segment containing
+        ``..`` and slipped past the guard. The fix normalises ``\\``
+        -> ``/`` before splitting.
+        """
+        paths = {"owner\\..\\evil/sub"}
+        result = _expand_with_ancestors(paths)
+        # Original kept (membership semantics), but NO ancestor must
+        # leak into the expansion.
+        assert "owner\\..\\evil/sub" in result
+        assert "owner" not in result
+        assert "owner/.." not in result
+        assert "owner\\..\\evil" not in result
+
+    def test_installed_guard_protects_real_orphan(self):
+        """When ``installed`` lists a real standalone package that is
+        also an ancestor of an expected subdir dep, the ancestor is
+        NOT added to the expansion -- so the real package can still
+        be detected as an orphan.
+        """
+        paths = {"owner/repo/.apm/skills/foo"}
+        result = _expand_with_ancestors(paths, installed={"owner/repo"})
+        assert "owner/repo" not in result, (
+            "Real installed package must not be masked by ancestor expansion"
+        )
+
+    def test_depth_cap_bounds_ancestor_emission(self):
+        """Ancestors past depth 3 are not emitted (security cap).
+
+        ``_scan_installed_packages`` skips dotted dirs and doesn't see
+        intermediates past depth 3, so emitting them would only widen
+        the orphan-suppression surface.
+        """
+        paths = {"owner/repo/.apm/skills/foo/extra/deeper"}
+        result = _expand_with_ancestors(paths)
+        assert "owner/repo" in result
+        # Cap stops emission at depth 3 (exclusive index 4).
+        assert "owner/repo/.apm/skills" not in result
+        assert "owner/repo/.apm/skills/foo" not in result
 
 
 # ---------------------------------------------------------------------------

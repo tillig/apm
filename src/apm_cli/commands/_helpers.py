@@ -189,25 +189,40 @@ def _expand_with_ancestors(
     subdirectory dep (``owner/repo/.apm/skills/foo``): only filesystem
     intermediaries are suppressed, never real installed packages.
 
-    Safety invariant: ``get_install_path()`` anchors installs at the
-    2-segment repo root (GitHub) or 3-segment root (ADO). Ancestor
-    expansion stops at len(parts) and starts at 2, so for ADO 3-segment
-    installs only ``org/project`` is added as an ancestor (which is never
-    a real installed package). If the install strategy changes, this
-    function must be re-evaluated.
+    Security contract -- ancestor depth cap: ``get_install_path()``
+    anchors installs at the 2-segment repo root (GitHub) or 3-segment
+    root (ADO). Anything deeper is a filesystem-intermediary path
+    (``.apm/``, ``skills/``, ...) that ``_scan_installed_packages``
+    skips, so emitting ancestors past depth 3 would only widen the
+    orphan-suppression surface without serving any real lookup. The
+    loop is therefore capped at depth 3 (``min(4, len(parts))``), which
+    bounds the number of paths an attacker-influenced ``apm.yml`` dep
+    declaration can hide from orphan detection. If the install strategy
+    ever grows deeper roots, lift this cap and document the new
+    invariant here.
 
-    Traversal guard: any input path containing a ``..`` segment is kept
-    in the result as-is (membership check) but produces no ancestors.
+    Traversal guard: any input path containing a ``..`` segment after
+    backslash normalisation is kept in the result as-is (membership
+    check) but produces no ancestors. Backslashes are normalised to
+    forward slashes before splitting so a path like
+    ``owner\\..\\evil`` cannot bypass the check by appearing as a
+    single unsplit token on POSIX hosts.
     """
     materialized = builtins.list(paths)
     materialized_set = builtins.set(materialized)
     expanded = builtins.set(materialized)
     installed_set = builtins.set(installed) if installed is not None else builtins.set()
     for p in materialized:
-        parts = p.split("/")
+        # Normalise backslashes so Windows-style or attacker-crafted
+        # tokens like "owner\\..\\evil" cannot smuggle a traversal
+        # segment past the '..' guard below.
+        normalised = p.replace("\\", "/")
+        parts = normalised.split("/")
         if ".." in parts:
             continue
-        for i in range(2, len(parts)):
+        # Cap at depth 3 -- the ADO install-root depth -- to bound the
+        # ancestor-suppression surface (see security contract above).
+        for i in range(2, min(4, len(parts))):
             ancestor = "/".join(parts[:i])
             # Do not mask a real installed package via ancestor expansion;
             # only filesystem intermediaries should be added. A real
@@ -242,6 +257,44 @@ def _scan_installed_packages(apm_modules_dir: Path) -> list:
     return installed
 
 
+def _standalone_installed_packages(
+    installed: Iterable[str], apm_modules_dir: Path, lockfile=None
+) -> list:
+    """Filter *installed* to entries that look like real standalone packages.
+
+    Determination order (tamper-evident first):
+
+    1. Path appears as a dependency key in *lockfile* -- the canonical
+       record of what APM installed. The lockfile is integrity-checked
+       and not forgeable by dropping/omitting files in ``apm_modules/``.
+    2. Fallback: path has its own ``apm.yml``. Used when the lockfile
+       is absent (older installs / fresh checkouts) or does not list
+       the key. A directory with only a ``.apm/`` marker is treated as
+       a filesystem intermediary, not a standalone package.
+
+    Combining both signals closes the suppression-via-absence gap
+    (panel finding: forgeable ``apm.yml`` heuristic) while preserving
+    behaviour for projects that pre-date the lockfile or have not yet
+    re-installed.
+    """
+    lockfile_keys: builtins.set[str] = builtins.set()
+    if lockfile is not None:
+        try:
+            for dep_key in lockfile.dependencies:
+                if dep_key:
+                    lockfile_keys.add(dep_key)
+        except Exception:
+            lockfile_keys = builtins.set()
+    standalone: list = []
+    for p in installed:
+        if p in lockfile_keys:
+            standalone.append(p)
+            continue
+        if (apm_modules_dir / p / APM_YML_FILENAME).exists():
+            standalone.append(p)
+    return standalone
+
+
 def _check_orphaned_packages():
     """Check for packages in apm_modules/ that are not declared in apm.yml or apm.lock.
 
@@ -272,18 +325,19 @@ def _check_orphaned_packages():
             return []
 
         installed = _scan_installed_packages(apm_modules_dir)
-        # Only paths with their own apm.yml are treated as "real installed
-        # packages" for ancestor-suppression purposes. A directory with
-        # only a .apm/ marker is more likely a filesystem intermediary
-        # produced by cloning a subdirectory dep (the cloned repo root
-        # contains the .apm/ subtree the dep points into) than a
-        # standalone published package, which always ships an apm.yml.
+        # Combined lockfile-membership + apm.yml fallback determines
+        # which installed paths are real standalone packages (and so
+        # must NOT be masked by ancestor expansion). The lockfile is
+        # the canonical, tamper-evident record; apm.yml-existence is
+        # the fallback for projects without a lockfile yet.
         # See _expand_with_ancestors for the user-safety rationale.
-        standalone_installed = [
-            p for p in installed if (apm_modules_dir / p / APM_YML_FILENAME).exists()
-        ]
+        standalone_installed = _standalone_installed_packages(
+            installed, apm_modules_dir, lockfile=lockfile
+        )
         expected_with_ancestors = _expand_with_ancestors(expected, standalone_installed)
-        return [p for p in installed if p not in expected_with_ancestors]
+        # Sort for deterministic, diffable output across runs (rglob
+        # traversal order is filesystem-dependent).
+        return sorted(p for p in installed if p not in expected_with_ancestors)
     except Exception:
         return []
 

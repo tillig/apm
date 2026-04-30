@@ -282,7 +282,17 @@ class TestDepsListCommand(_DepsCmdBase):
         assert "No insecure APM dependencies installed" in result.output
 
     def test_list_subdirectory_parent_not_orphaned(self):
-        """Parent dir of a subdirectory virtual package is not flagged orphaned."""
+        """Parent dir of a subdirectory virtual package is not flagged orphaned.
+
+        Per panel feedback (test fixture nit): the simpler -- and more
+        accurate -- representation of the subdir-dep bug uses NO
+        ``apm.yml`` at the ``owner/repo`` parent (only the ``.apm/``
+        marker created by the clone). With ``apm.yml`` present at
+        ``owner/repo`` the directory is a real standalone package and
+        the new ``standalone_installed`` guard correctly flags it as
+        orphaned (it is not declared anywhere). Drop the conflated
+        ``apm.yml`` to test the intended scenario.
+        """
         with self._chdir_tmp() as tmp:
             # Declare a dict-form dependency with path: pointing into .apm/skills/
             (tmp / "apm.yml").write_text(
@@ -295,11 +305,11 @@ class TestDepsListCommand(_DepsCmdBase):
                 encoding="utf-8",
             )
 
-            # Simulate installed layout: owner/repo/ with apm.yml (so deps list
-            # scans it as a package) plus the nested skill content.
+            # Simulate installed layout: owner/repo/ with NO apm.yml --
+            # only the cloned .apm/ subtree. ``owner/repo`` is a pure
+            # filesystem intermediary, not a standalone package.
             repo_dir = tmp / "apm_modules" / "owner" / "repo"
             repo_dir.mkdir(parents=True)
-            (repo_dir / "apm.yml").write_text("name: repo\nversion: 1.0.0\n", encoding="utf-8")
             skill_dir = repo_dir / ".apm" / "skills" / "my-skill"
             skill_dir.mkdir(parents=True)
             (skill_dir / "SKILL.md").write_text("# Skill", encoding="utf-8")
@@ -308,6 +318,9 @@ class TestDepsListCommand(_DepsCmdBase):
                 result = self.runner.invoke(cli, ["deps", "list"])
 
             assert result.exit_code == 0
+            # Assertion targets the deps-specific orphan header
+            # (deps says "orphaned package(s) found", prune says
+            # "Found N orphaned package(s)").
             assert "orphaned package(s) found" not in result.output
 
 
