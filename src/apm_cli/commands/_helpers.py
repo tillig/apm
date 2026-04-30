@@ -158,18 +158,32 @@ def _build_expected_install_paths(declared_deps, lockfile, apm_modules_dir: Path
     return expected
 
 
-def _expand_with_ancestors(paths: Iterable[str]) -> set:
-    """Expand a set of paths to include all ancestor prefixes.
+def _expand_with_ancestors(paths: Iterable[str]) -> set[str]:
+    """Expand a set of expected paths to include ancestor prefixes.
 
-    Given {"owner/repo/.apm/skills/my-skill"}, returns a set containing both
-    the original path and "owner/repo" (all intermediate path prefixes with
-    2+ segments). This allows O(1) membership checks when determining whether
-    a scanned directory is an ancestor of an expected package path.
+    Given ``{"owner/repo/.apm/skills/my-skill"}``, returns a set containing
+    the original path plus all intermediate path prefixes with 2+ segments
+    (e.g., ``"owner/repo"``, ``"owner/repo/.apm"``, ``"owner/repo/.apm/skills"``).
+    This allows O(1) membership checks when determining whether a scanned
+    directory is an ancestor of an expected package path.
+
+    Ancestor expansion is unconditional because a subdirectory dependency
+    (``git: owner/repo, path: .apm/skills/x``) is installed by cloning the
+    entire repo to ``apm_modules/owner/repo/``. The parent directory is
+    therefore always a required part of the install -- never a stale leftover.
+    A package at ``owner/repo`` cannot be "genuinely orphaned" while an active
+    subdirectory dependency references content inside it.
+
+    Safety invariant: ``get_install_path()`` anchors installs at the 2-segment
+    repo root (GitHub) or 3-segment root (ADO). Ancestor expansion relies on
+    this -- if the install strategy changes, this function must be re-evaluated.
     """
     materialized = builtins.list(paths)
     expanded = builtins.set(materialized)
     for p in materialized:
         parts = p.split("/")
+        if ".." in parts:
+            continue
         for i in range(2, len(parts)):
             expanded.add("/".join(parts[:i]))
     return expanded
