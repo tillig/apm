@@ -148,11 +148,14 @@ class TestPreflightGenericHostAllowsCredentialHelpers:
     """Generic hosts (GHES, GitLab, etc.) must not block credential helpers (#1082)."""
 
     @patch("subprocess.run")
-    def test_generic_host_env_omits_git_config_global(self, mock_run):
-        """The probe env for generic hosts must NOT set GIT_CONFIG_GLOBAL.
+    def test_generic_host_env_omits_credential_blocking_vars(self, mock_run):
+        """The probe env for generic hosts must not contain any of the vars
+        that block credential helpers: GIT_CONFIG_GLOBAL, GIT_CONFIG_NOSYSTEM,
+        or GIT_ASKPASS.
 
-        GIT_CONFIG_GLOBAL=/dev/null blocks credential helpers configured in
-        ~/.gitconfig, which is the primary auth mechanism for non-GitHub hosts.
+        These vars prevent git from reading ~/.gitconfig (where credential
+        helpers are configured), which is the primary auth mechanism for
+        non-GitHub/non-ADO hosts.
         """
         mock_run.return_value = MagicMock(returncode=0, stderr="", stdout="")
 
@@ -166,30 +169,9 @@ class TestPreflightGenericHostAllowsCredentialHelpers:
 
         assert mock_run.call_count == 1
         call_env = mock_run.call_args[1]["env"]
-        # GIT_CONFIG_GLOBAL must not be set (or must not point to /dev/null)
-        # so that credential helpers from ~/.gitconfig can function.
-        git_config_global = call_env.get("GIT_CONFIG_GLOBAL")
-        assert git_config_global is None or git_config_global != "/dev/null"
-
-    @patch("subprocess.run")
-    def test_generic_host_env_does_not_force_askpass_echo(self, mock_run):
-        """GIT_ASKPASS must not be 'echo' for generic hosts.
-
-        Setting GIT_ASKPASS=echo prevents credential helpers from being
-        invoked by git.
-        """
-        mock_run.return_value = MagicMock(returncode=0, stderr="", stdout="")
-
-        dep = _make_generic_dep(host="gitlab.example.com")
-        ctx = _make_ctx(deps=[dep])
-        resolver = _make_resolver(token="some-token")
-
-        from apm_cli.install.pipeline import _preflight_auth_check
-
-        _preflight_auth_check(ctx, resolver, verbose=False)
-
-        call_env = mock_run.call_args[1]["env"]
-        assert call_env.get("GIT_ASKPASS") != "echo"
+        assert "GIT_CONFIG_GLOBAL" not in call_env
+        assert "GIT_CONFIG_NOSYSTEM" not in call_env
+        assert "GIT_ASKPASS" not in call_env
 
     @patch("subprocess.run")
     def test_generic_host_auth_failure_still_raises(self, mock_run):
