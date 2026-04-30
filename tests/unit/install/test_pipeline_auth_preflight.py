@@ -212,19 +212,31 @@ class TestPreflightGenericHostAllowsCredentialHelpers:
         assert "ghes.corp.example.com" in str(exc_info.value)
 
     @patch("subprocess.run")
-    @patch("apm_cli.deps.github_downloader.GitHubPackageDownloader._build_noninteractive_git_env")
-    def test_ado_host_does_not_use_noninteractive_env(self, mock_ni_env, mock_run):
-        """ADO hosts should NOT use the noninteractive env (they use token in URL)."""
+    def test_ado_host_retains_credential_blocking_env(self, mock_run):
+        """ADO hosts should retain GIT_ASKPASS (locked-down env with token in URL).
+
+        Generic hosts strip GIT_ASKPASS to allow credential helpers; ADO hosts
+        keep it because auth is via token embedded in the URL.
+        """
         mock_run.return_value = MagicMock(returncode=0, stderr="", stdout="")
-        mock_ni_env.return_value = {"MARKER": "noninteractive"}
 
         dep = _make_dep(host="dev.azure.com", repo_url="myorg/myproject/_git/myrepo")
         ctx = _make_ctx(deps=[dep])
-        resolver = _make_resolver(token="ado-pat")
+        # Simulate ADO git_env that carries the blocking vars (as real AuthResolver does)
+        resolver = _make_resolver(
+            token="ado-pat",
+            git_env={
+                "GIT_CONFIG_NOSYSTEM": "1",
+                "GIT_ASKPASS": "echo",
+                "GIT_CONFIG_GLOBAL": "/dev/null",
+            },
+        )
 
         from apm_cli.install.pipeline import _preflight_auth_check
 
         _preflight_auth_check(ctx, resolver, verbose=False)
 
-        # _build_noninteractive_git_env should NOT be called for ADO hosts
-        mock_ni_env.assert_not_called()
+        call_env = mock_run.call_args[1]["env"]
+        # ADO hosts keep the locked-down env since tokens are embedded in the URL
+        assert call_env.get("GIT_CONFIG_NOSYSTEM") == "1"
+        assert call_env.get("GIT_ASKPASS") == "echo"
