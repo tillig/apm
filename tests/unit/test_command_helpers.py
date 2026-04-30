@@ -292,6 +292,14 @@ class TestExpandWithAncestors:
         assert "owner/repo-extra" in result
         assert "owner/repo" not in result
 
+    def test_skips_path_traversal(self):
+        """Paths containing '..' are skipped during expansion."""
+        paths = {"owner/../etc/passwd"}
+        result = _expand_with_ancestors(paths)
+        # Original path is kept (it's in the input set), but no ancestors are generated
+        assert "owner/../etc/passwd" in result
+        assert "owner/.." not in result
+
 
 # ---------------------------------------------------------------------------
 # _check_orphaned_packages -- subdirectory ancestor false-positive fix
