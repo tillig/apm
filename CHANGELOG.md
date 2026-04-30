@@ -5,8 +5,8 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-
 ## [Unreleased]
+
 ### Added
 
 - Slash commands installed from APM packages now surface argument hints in Claude Code -- `apm install` automatically maps prompt `input:` to Claude's `arguments:` front-matter, rewrites `${input:name}` references to `$name`, and auto-generates `argument-hint`. Argument names are validated against an allowlist to prevent YAML injection from third-party packages, and the mapping is reported at install time. (#1039)
@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `apm compile`, `apm prune`, and `apm deps list` no longer falsely flag parent directories of subdirectory virtual packages as orphaned. When a dependency uses dict-form (`git:` + `path:`) pointing at a nested path (e.g., `.apm/skills/skill-name`), the intermediate `owner/repo/` directory is now recognized as an ancestor of the expected install path rather than an orphaned package. (#1050)
 
 ## [0.11.0] - 2026-04-29
+
 ### Added
 
 - **`apm pack` is now the single command for marketplace builds** -- with an `apm.yml` `marketplace:` block it emits `.claude-plugin/marketplace.json` directly. New flags: `--offline`, `--include-prerelease`, `--marketplace-output PATH`. (#722)
