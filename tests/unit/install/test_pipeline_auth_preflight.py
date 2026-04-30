@@ -172,7 +172,7 @@ class TestPreflightGenericHostAllowsCredentialHelpers:
         assert git_config_global is None or git_config_global != "/dev/null"
 
     @patch("subprocess.run")
-    def test_generic_host_env_allows_askpass(self, mock_run):
+    def test_generic_host_env_does_not_force_askpass_echo(self, mock_run):
         """GIT_ASKPASS must not be 'echo' for generic hosts.
 
         Setting GIT_ASKPASS=echo prevents credential helpers from being
