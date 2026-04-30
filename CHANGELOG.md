@@ -22,7 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- **Orphan detection improved** -- Orphan detection performed by `apm prune`, `apm deps list`, and `apm compile` no longer incorrectly flags the parent directory of a skill installed from a subdirectory path (e.g., `.apm/skills/skill-name`). The folder is now correctly recognized as part of the install tree. (#1050)
+- **Orphan detection improved** -- `apm prune` no longer asks you to remove a parent directory you cannot remove: when a skill is installed from a subdirectory path (e.g., `.apm/skills/skill-name`), the cloned `owner/repo/` parent is now correctly recognized as part of the install tree instead of being flagged as an orphan. The same fix applies to `apm deps list` and `apm compile`. A genuinely orphaned `owner/repo` package is still flagged even when a sibling subdirectory dep shares the same `owner/repo` root. (#1050)
 
 ## [0.11.0] - 2026-04-29
 

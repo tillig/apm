@@ -158,34 +158,64 @@ def _build_expected_install_paths(declared_deps, lockfile, apm_modules_dir: Path
     return expected
 
 
-def _expand_with_ancestors(paths: Iterable[str]) -> set[str]:
+def _expand_with_ancestors(
+    paths: Iterable[str], installed: Iterable[str] | None = None
+) -> builtins.set[str]:
     """Expand a set of expected paths to include ancestor prefixes.
 
     Given ``{"owner/repo/.apm/skills/my-skill"}``, returns a set containing
     the original path plus all intermediate path prefixes with 2+ segments
-    (e.g., ``"owner/repo"``, ``"owner/repo/.apm"``, ``"owner/repo/.apm/skills"``).
+    (e.g., ``"owner/repo"``, ``"owner/repo/.apm"``,
+    ``"owner/repo/.apm/skills"``, plus the original
+    ``"owner/repo/.apm/skills/my-skill"``).
     This allows O(1) membership checks when determining whether a scanned
     directory is an ancestor of an expected package path.
 
-    Ancestor expansion is unconditional because a subdirectory dependency
+    Ancestor expansion exists because a subdirectory dependency
     (``git: owner/repo, path: .apm/skills/x``) is installed by cloning the
-    entire repo to ``apm_modules/owner/repo/``. The parent directory is
-    therefore always a required part of the install -- never a stale leftover.
-    A package at ``owner/repo`` cannot be "genuinely orphaned" while an active
-    subdirectory dependency references content inside it.
+    entire repo to ``apm_modules/owner/repo/``. Intermediate filesystem
+    directories created by that clone are required parts of the install --
+    not stale leftovers.
 
-    Safety invariant: ``get_install_path()`` anchors installs at the 2-segment
-    repo root (GitHub) or 3-segment root (ADO). Ancestor expansion relies on
-    this -- if the install strategy changes, this function must be re-evaluated.
+    Real-orphan safety: when *installed* is supplied, an ancestor that
+    matches one of the installed paths is NOT added to the expansion
+    unless that path is also directly declared in *paths*. Callers should
+    pass only the subset of installed paths that look like *real
+    standalone packages* (i.e., directories that ship their own
+    ``apm.yml``) -- not filesystem intermediaries (which typically have
+    only a ``.apm/`` subtree from a cloned subdir dep). This preserves
+    orphan detection for the case where a user has a genuinely orphaned
+    ``owner/repo`` package on disk alongside a declared sibling
+    subdirectory dep (``owner/repo/.apm/skills/foo``): only filesystem
+    intermediaries are suppressed, never real installed packages.
+
+    Safety invariant: ``get_install_path()`` anchors installs at the
+    2-segment repo root (GitHub) or 3-segment root (ADO). Ancestor
+    expansion stops at len(parts) and starts at 2, so for ADO 3-segment
+    installs only ``org/project`` is added as an ancestor (which is never
+    a real installed package). If the install strategy changes, this
+    function must be re-evaluated.
+
+    Traversal guard: any input path containing a ``..`` segment is kept
+    in the result as-is (membership check) but produces no ancestors.
     """
     materialized = builtins.list(paths)
+    materialized_set = builtins.set(materialized)
     expanded = builtins.set(materialized)
+    installed_set = builtins.set(installed) if installed is not None else builtins.set()
     for p in materialized:
         parts = p.split("/")
         if ".." in parts:
             continue
         for i in range(2, len(parts)):
-            expanded.add("/".join(parts[:i]))
+            ancestor = "/".join(parts[:i])
+            # Do not mask a real installed package via ancestor expansion;
+            # only filesystem intermediaries should be added. A real
+            # installed package that is also directly declared remains in
+            # expanded via materialized_set.
+            if ancestor in installed_set and ancestor not in materialized_set:
+                continue
+            expanded.add(ancestor)
     return expanded
 
 
@@ -242,7 +272,17 @@ def _check_orphaned_packages():
             return []
 
         installed = _scan_installed_packages(apm_modules_dir)
-        expected_with_ancestors = _expand_with_ancestors(expected)
+        # Only paths with their own apm.yml are treated as "real installed
+        # packages" for ancestor-suppression purposes. A directory with
+        # only a .apm/ marker is more likely a filesystem intermediary
+        # produced by cloning a subdirectory dep (the cloned repo root
+        # contains the .apm/ subtree the dep points into) than a
+        # standalone published package, which always ships an apm.yml.
+        # See _expand_with_ancestors for the user-safety rationale.
+        standalone_installed = [
+            p for p in installed if (apm_modules_dir / p / APM_YML_FILENAME).exists()
+        ]
+        expected_with_ancestors = _expand_with_ancestors(expected, standalone_installed)
         return [p for p in installed if p not in expected_with_ancestors]
     except Exception:
         return []

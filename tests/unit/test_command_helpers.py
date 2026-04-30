@@ -426,6 +426,52 @@ class TestCheckOrphanedPackagesSubdirectoryAncestor:
         assert "org/my-package" not in orphaned
         assert "org/old-package" in orphaned
 
+    def test_real_orphan_at_owner_repo_with_sibling_subdir_dep(self, tmp_path, monkeypatch):
+        """Regression: a real installed ``owner/repo`` package on disk MUST
+        still be flagged as orphaned even when a sibling subdirectory dep
+        ``owner/repo/.apm/skills/foo`` is declared in apm.yml.
+
+        Previously, ancestor expansion blindly added ``owner/repo`` to the
+        expected set whenever a subdir dep referenced it, silently
+        suppressing detection of a genuinely orphaned standalone package
+        that shared the same ``owner/repo`` filesystem root. ``apm prune``
+        is a safety command -- it must NEVER silently miss a real orphan.
+        """
+        monkeypatch.chdir(tmp_path)
+
+        # Declare ONLY the subdirectory dep. The standalone owner/repo
+        # package on disk is NOT declared anywhere.
+        apm_yml = tmp_path / "apm.yml"
+        apm_yml.write_text(
+            "name: test\n"
+            "version: 1.0.0\n"
+            "dependencies:\n"
+            "  apm:\n"
+            "    - git: github.example.com/owner/repo\n"
+            "      path: .apm/skills/foo\n",
+            encoding="utf-8",
+        )
+
+        apm_modules = tmp_path / "apm_modules"
+        # Real installed standalone package at owner/repo (with apm.yml AND
+        # .apm marker). This is a genuine orphan -- nothing in apm.yml
+        # declares the whole repo as a dep.
+        pkg_dir = apm_modules / "owner" / "repo"
+        pkg_dir.mkdir(parents=True)
+        (pkg_dir / "apm.yml").write_text("name: repo\nversion: 1.0.0", encoding="utf-8")
+        # Subdirectory dep content (legitimately installed) shares the
+        # same ``owner/repo`` root.
+        skill_dir = pkg_dir / ".apm" / "skills" / "foo"
+        skill_dir.mkdir(parents=True)
+        (skill_dir / "SKILL.md").write_text("# Skill", encoding="utf-8")
+
+        orphaned = _check_orphaned_packages()
+        assert "owner/repo" in orphaned, (
+            "Real orphan at owner/repo must be flagged even when a "
+            "sibling subdirectory dep shares the same root; got: "
+            f"{orphaned}"
+        )
+
 
 # ---------------------------------------------------------------------------
 # _check_and_notify_updates
