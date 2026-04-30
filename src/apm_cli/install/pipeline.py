@@ -58,7 +58,7 @@ def _preflight_auth_check(ctx, auth_resolver, verbose: bool) -> None:
     import os
     import subprocess as _sp
 
-    from ..utils.github_host import is_github_hostname
+    from ..utils.github_host import is_azure_devops_hostname, is_github_hostname
 
     seen: builtins.set = builtins.set()
     for dep in ctx.deps_to_install:
@@ -85,8 +85,12 @@ def _preflight_auth_check(ctx, auth_resolver, verbose: bool) -> None:
             token=dep_ctx.token,
             auth_scheme=_auth_scheme,
         )
-        _ctx_env = getattr(dep_ctx, "git_env", {}) or {}
-        probe_env = {**os.environ, **_dl.git_env, **_ctx_env}
+        is_generic = not is_github_hostname(host) and not is_azure_devops_hostname(host)
+        if is_generic:
+            probe_env = {**os.environ, **_dl._build_noninteractive_git_env()}
+        else:
+            _ctx_env = getattr(dep_ctx, "git_env", {}) or {}
+            probe_env = {**os.environ, **_dl.git_env, **_ctx_env}
 
         try:
             result = _sp.run(
