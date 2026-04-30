@@ -922,10 +922,45 @@ class AgentsCompiler:
         result.stats["copilot_root_instructions_generated"] = 1
         result.stats.setdefault("copilot_root_instructions_skipped", 0)
         result.stats.setdefault("copilot_root_instructions_removed", 0)
+        result.stats.setdefault("copilot_root_instructions_written", 0)
+        result.stats.setdefault("copilot_root_instructions_unchanged", 0)
+
+        # Inspect any existing file BEFORE the dry-run early-exit so that
+        # `--dry-run` faithfully reports what a real run would do (skip vs
+        # write vs unchanged). Reading the file here is safe in dry-run mode
+        # because we never mutate it.
+        try:
+            existing = output_path.read_text(encoding="utf-8") if output_path.exists() else None
+        except OSError as exc:
+            message = f"Failed to read {output_path}: {exc}"
+            self.errors.append(message)
+            result.errors.append(message)
+            result.success = False
+            return result
+
+        if existing is not None and _COPILOT_ROOT_GENERATED_MARKER not in existing:
+            rel_path = portable_relpath(output_path, self.base_dir)
+            result.warnings.append(
+                f"Skipped {rel_path}: hand-authored file will not be overwritten. "
+                "To regenerate, either delete or rename it, or prepend the line "
+                f"'{_COPILOT_ROOT_GENERATED_MARKER}' to the top of the file. "
+                "Then re-run 'apm compile'."
+            )
+            # The file was never compared to new content; record as
+            # 'skipped', not 'unchanged'. Also reset 'generated' since no
+            # output was actually emitted (or would be, on a real run).
+            result.stats["copilot_root_instructions_generated"] = 0
+            result.stats["copilot_root_instructions_written"] = 0
+            result.stats["copilot_root_instructions_skipped"] = 1
+            result.stats["copilot_root_instructions_unchanged"] = 0
+            return result
+
+        if existing == content:
+            result.stats["copilot_root_instructions_written"] = 0
+            result.stats["copilot_root_instructions_unchanged"] = 1
+            return result
 
         if config.dry_run:
-            result.stats.setdefault("copilot_root_instructions_written", 0)
-            result.stats.setdefault("copilot_root_instructions_unchanged", 0)
             return result
 
         from ..security.gate import WARN_POLICY, SecurityGate
@@ -942,27 +977,6 @@ class AgentsCompiler:
 
         try:
             output_path.parent.mkdir(parents=True, exist_ok=True)
-            existing = output_path.read_text(encoding="utf-8") if output_path.exists() else None
-            if existing is not None and _COPILOT_ROOT_GENERATED_MARKER not in existing:
-                rel_path = portable_relpath(output_path, self.base_dir)
-                result.warnings.append(
-                    f"Skipped {rel_path}: file exists without an APM marker and "
-                    "will not be overwritten. Remove or rename it, then re-run "
-                    "'apm compile' to regenerate."
-                )
-                # The file was never compared to new content; record as
-                # 'skipped', not 'unchanged'. Also reset 'generated' since no
-                # output was actually emitted.
-                result.stats["copilot_root_instructions_generated"] = 0
-                result.stats["copilot_root_instructions_written"] = 0
-                result.stats["copilot_root_instructions_skipped"] = 1
-                result.stats.setdefault("copilot_root_instructions_unchanged", 0)
-                return result
-            if existing == content:
-                result.stats["copilot_root_instructions_written"] = 0
-                result.stats["copilot_root_instructions_unchanged"] = 1
-                return result
-
             output_path.write_text(content, encoding="utf-8")
             result.stats["copilot_root_instructions_written"] = 1
             result.stats["copilot_root_instructions_unchanged"] = 0
