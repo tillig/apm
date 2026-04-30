@@ -1,20 +1,20 @@
 """Unit tests for ClaudeFormatter - CLAUDE.md generation."""
 
-import tempfile
 import shutil
+import tempfile
 from pathlib import Path
 
 import pytest
 
 from apm_cli.compilation.claude_formatter import (
+    CLAUDE_HEADER,
+    ClaudeCompilationResult,
     ClaudeFormatter,
     ClaudePlacement,
-    ClaudeCompilationResult,
     format_claude_md,
-    CLAUDE_HEADER,
 )
 from apm_cli.compilation.constants import BUILD_ID_PLACEHOLDER
-from apm_cli.primitives.models import Instruction, Chatmode, PrimitiveCollection
+from apm_cli.primitives.models import Chatmode, Instruction, PrimitiveCollection
 from apm_cli.version import get_version
 
 
@@ -62,7 +62,7 @@ class TestFormatDistributed:
             apply_to="**/*.py",
             content="Use type hints and follow PEP 8.",
             author="test",
-            source="local"
+            source="local",
         )
 
         instruction2 = Instruction(
@@ -72,7 +72,7 @@ class TestFormatDistributed:
             apply_to="**/*.js",
             content="Use ES6+ features.",
             author="test",
-            source="local"
+            source="local",
         )
 
         primitives.add_primitive(instruction1)
@@ -137,7 +137,7 @@ class TestFormatDistributed:
         formatter = ClaudeFormatter(str(temp_project))
 
         placement_map = {temp_project: list(sample_primitives.instructions)}
-        config = {'source_attribution': True}
+        config = {"source_attribution": True}
         result = formatter.format_distributed(sample_primitives, placement_map, config)
 
         content = result.content_map[temp_project / "CLAUDE.md"]
@@ -148,7 +148,7 @@ class TestFormatDistributed:
         formatter = ClaudeFormatter(str(temp_project))
 
         placement_map = {temp_project: list(sample_primitives.instructions)}
-        config = {'source_attribution': False}
+        config = {"source_attribution": False}
         result = formatter.format_distributed(sample_primitives, placement_map, config)
 
         # Source attribution should not be tracked in placement
@@ -162,9 +162,9 @@ class TestFormatDistributed:
         placement_map = {temp_project: list(sample_primitives.instructions)}
         result = formatter.format_distributed(sample_primitives, placement_map)
 
-        assert result.stats['claude_files_generated'] == 1
-        assert result.stats['total_instructions_placed'] == 2
-        assert result.stats['total_patterns_covered'] == 2
+        assert result.stats["claude_files_generated"] == 1
+        assert result.stats["total_instructions_placed"] == 2
+        assert result.stats["total_patterns_covered"] == 2
 
     def test_format_empty_placement_map(self, temp_project):
         """Test formatting with empty placement map."""
@@ -191,7 +191,7 @@ class TestFormatDistributed:
 
         assert result.success
         if result.content_map:
-            content = list(result.content_map.values())[0]
+            content = list(result.content_map.values())[0]  # noqa: RUF015
             assert "# Constitution" in content
             assert "Be helpful and accurate." in content
 
@@ -205,6 +205,7 @@ class TestDependenciesImportSyntax:
         temp_dir = tempfile.mkdtemp()
         temp_path = Path(temp_dir).resolve()
 
+        # Create apm_modules structure
         apm_modules = temp_path / "apm_modules"
         # Packages WITH CLAUDE.md - should be included
         (apm_modules / "owner1" / "package1").mkdir(parents=True)
@@ -230,7 +231,7 @@ class TestDependenciesImportSyntax:
             description="Test",
             apply_to="**/*.py",
             content="Test content",
-            author="test"
+            author="test",
         )
         primitives.add_primitive(instruction)
 
@@ -294,7 +295,7 @@ class TestAgentsExcludedFromClaudeMd:
             description="Expert code reviewer",
             apply_to=None,
             content="You are an expert code reviewer. Focus on security and performance.",
-            author="test"
+            author="test",
         )
         primitives.add_primitive(chatmode)
 
@@ -304,7 +305,7 @@ class TestAgentsExcludedFromClaudeMd:
             description="Test",
             apply_to="**/*.py",
             content="Test content",
-            author="test"
+            author="test",
         )
         primitives.add_primitive(instruction)
 
@@ -331,7 +332,7 @@ class TestAgentsExcludedFromClaudeMd:
             description="Reviewer",
             apply_to=None,
             content="You are a reviewer.",
-            author="test"
+            author="test",
         )
         primitives.add_primitive(chatmode)
 
@@ -341,7 +342,7 @@ class TestAgentsExcludedFromClaudeMd:
             description="Python standards",
             apply_to="**/*.py",
             content="Use type hints for all functions.",
-            author="test"
+            author="test",
         )
         primitives.add_primitive(instruction)
 
@@ -369,7 +370,7 @@ class TestAgentsExcludedFromClaudeMd:
             description="Code reviewer",
             apply_to=None,
             content="Review code.",
-            author="test"
+            author="test",
         )
         chatmode2 = Chatmode(
             name="architect",
@@ -377,7 +378,7 @@ class TestAgentsExcludedFromClaudeMd:
             description="System architect",
             apply_to=None,
             content="Design systems.",
-            author="test"
+            author="test",
         )
         primitives.add_primitive(chatmode1)
         primitives.add_primitive(chatmode2)
@@ -388,7 +389,7 @@ class TestAgentsExcludedFromClaudeMd:
             description="Test",
             apply_to="**/*.py",
             content="Test instruction content",
-            author="test"
+            author="test",
         )
         primitives.add_primitive(instruction)
 
@@ -427,7 +428,7 @@ class TestConvenienceFunctions:
             description="Test",
             apply_to="**/*.py",
             content="Test content",
-            author="test"
+            author="test",
         )
         primitives.add_primitive(instruction)
 
@@ -444,10 +445,7 @@ class TestDataclasses:
 
     def test_claude_placement_defaults(self):
         """Test ClaudePlacement default values."""
-        placement = ClaudePlacement(
-            claude_path=Path("test/CLAUDE.md"),
-            instructions=[]
-        )
+        placement = ClaudePlacement(claude_path=Path("test/CLAUDE.md"), instructions=[])
 
         assert placement.agents == []
         assert placement.dependencies == []
@@ -456,11 +454,7 @@ class TestDataclasses:
 
     def test_claude_compilation_result_defaults(self):
         """Test ClaudeCompilationResult default values."""
-        result = ClaudeCompilationResult(
-            success=True,
-            placements=[],
-            content_map={}
-        )
+        result = ClaudeCompilationResult(success=True, placements=[], content_map={})
 
         assert result.warnings == []
         assert result.errors == []
@@ -490,7 +484,7 @@ class TestErrorHandling:
             description="Test",
             apply_to="**/*.py",
             content="Test",
-            author="test"
+            author="test",
         )
         primitives.add_primitive(instruction)
 
