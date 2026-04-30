@@ -166,8 +166,9 @@ def _expand_with_ancestors(paths: Iterable[str]) -> set:
     2+ segments). This allows O(1) membership checks when determining whether
     a scanned directory is an ancestor of an expected package path.
     """
-    expanded = builtins.set(paths)
-    for p in paths:
+    materialized = builtins.list(paths)
+    expanded = builtins.set(materialized)
+    for p in materialized:
         parts = p.split("/")
         for i in range(2, len(parts)):
             expanded.add("/".join(parts[:i]))
