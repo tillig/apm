@@ -588,3 +588,90 @@ class TestCheckAndNotifyUpdates:
                 ):
                     # Should not raise
                     _check_and_notify_updates()
+
+
+# ---------------------------------------------------------------------------
+# Round-3 panel regressions:
+#   - traversal guard must route through canonical validate_path_segments
+#   - _standalone_installed_packages must NOT swallow corruption errors
+# ---------------------------------------------------------------------------
+
+
+class TestExpandWithAncestorsRoutesThroughCanonicalGuard:
+    """Round-3 supply-chain finding: ad-hoc ``..`` check must be replaced
+    by ``apm_cli.utils.path_security.validate_path_segments`` so the
+    project keeps a single chokepoint for path-segment validation and
+    also catches single-dot (``.``) traversal segments.
+    """
+
+    def test_helpers_traversal_uses_validate_path_segments(self):
+        """``_expand_with_ancestors`` calls the canonical guard once per
+        input path. Mocking the guard and asserting it was called proves
+        the hand-rolled ``".." in parts`` check is gone.
+        """
+        with patch("apm_cli.commands._helpers.validate_path_segments") as mock_guard:
+            _expand_with_ancestors({"owner/repo/.apm/skills/foo"})
+            assert mock_guard.called, (
+                "Ancestor expansion must route every input through "
+                "validate_path_segments rather than a hand-rolled '..' check"
+            )
+            called_paths = {call.args[0] for call in mock_guard.call_args_list}
+            assert "owner/repo/.apm/skills/foo" in called_paths
+
+    def test_single_dot_segment_now_rejected(self):
+        """Single-dot segments are rejected by the canonical guard
+        (which the prior ad-hoc ``".." in parts`` check missed). The
+        path is kept in the result (membership semantics) but no
+        ancestors are emitted.
+        """
+        result = _expand_with_ancestors({"owner/./repo"})
+        assert "owner/./repo" in result
+        assert "owner" not in result
+        assert "owner/." not in result
+
+
+class TestStandaloneInstalledDoesNotSwallowCorruption:
+    """Round-3 supply-chain finding: bare ``except Exception`` in
+    ``_standalone_installed_packages`` silently destroyed
+    ``lockfile_keys`` and failed open on lockfile corruption. The
+    narrowed ``except (AttributeError, TypeError, KeyError)`` clause
+    must let unexpected exceptions propagate.
+    """
+
+    def test_standalone_installed_does_not_swallow_lockfile_corruption(self, tmp_path):
+        """A lockfile object whose ``dependencies`` attribute raises an
+        unexpected exception (e.g. ``RuntimeError`` from a corrupted /
+        attacker-crafted backing store) must propagate, not silently
+        return an empty list.
+        """
+        from apm_cli.commands._helpers import _standalone_installed_packages
+
+        class CorruptLockfile:
+            @property
+            def dependencies(self):
+                raise RuntimeError("simulated lockfile corruption")
+
+        with pytest.raises(RuntimeError, match="simulated lockfile corruption"):
+            _standalone_installed_packages(["owner/repo"], tmp_path, lockfile=CorruptLockfile())
+
+    def test_standalone_installed_absorbs_narrow_shape_errors(self, tmp_path):
+        """Narrow shape errors (TypeError when ``dependencies`` is e.g.
+        an ``int`` due to YAML coercion) are intentionally absorbed and
+        degrade to the ``apm.yml``-only fallback.
+        """
+        from apm_cli.commands._helpers import _standalone_installed_packages
+
+        class BadShapeLockfile:
+            dependencies = 42  # not iterable -> TypeError on for-loop
+
+        # Create owner/repo with apm.yml so fallback marks it standalone.
+        (tmp_path / "owner" / "repo").mkdir(parents=True)
+        (tmp_path / "owner" / "repo" / "apm.yml").write_text(
+            "name: r\nversion: 1.0", encoding="utf-8"
+        )
+        result = _standalone_installed_packages(
+            ["owner/repo"], tmp_path, lockfile=BadShapeLockfile()
+        )
+        assert result == ["owner/repo"], (
+            "Narrow shape errors must degrade to apm.yml fallback, not propagate to caller"
+        )

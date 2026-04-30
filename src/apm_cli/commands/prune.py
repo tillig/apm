@@ -82,12 +82,12 @@ def prune(ctx, dry_run):
             return
 
         # Show what will be removed
-        logger.progress(f"Found {len(orphaned_packages)} orphaned package(s):")
+        logger.warning(f"Found {len(orphaned_packages)} orphaned package(s):")
         for pkg_name in orphaned_packages:
             if dry_run:
-                logger.progress(f"  - {pkg_name} (would be removed)")
+                logger.warning(f"  - {pkg_name} (would be removed)")
             else:
-                logger.progress(f"  - {pkg_name}")
+                logger.warning(f"  - {pkg_name}")
 
         if dry_run:
             logger.success("Dry run complete - no changes made")

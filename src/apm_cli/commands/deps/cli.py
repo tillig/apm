@@ -310,8 +310,8 @@ def _show_scope_deps(scope_label, apm_dir, logger, console, has_rich, insecure_o
         if orphaned_packages:
             logger.warning(f"{len(orphaned_packages)} orphaned package(s) found (not in apm.yml):")
             for pkg in orphaned_packages:
-                logger.progress(f"  - {pkg}")
-            logger.progress("Run 'apm prune' to remove orphaned packages")
+                logger.warning(f"  - {pkg}")
+            logger.info("Run 'apm prune' to remove orphaned packages")
     else:
         # Fallback text table
         if insecure_only:
@@ -354,8 +354,8 @@ def _show_scope_deps(scope_label, apm_dir, logger, console, has_rich, insecure_o
         if orphaned_packages:
             logger.warning(f"{len(orphaned_packages)} orphaned package(s) found (not in apm.yml):")
             for pkg in orphaned_packages:
-                logger.progress(f"  - {pkg}")
-            logger.progress("Run 'apm prune' to remove orphaned packages")
+                logger.warning(f"  - {pkg}")
+            logger.info("Run 'apm prune' to remove orphaned packages")
 
 
 @deps.command(name="list", help="List installed APM dependencies")

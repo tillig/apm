@@ -24,6 +24,7 @@ from ..constants import (
 from ..update_policy import get_update_hint_message, is_self_update_enabled
 from ..utils.atomic_io import atomic_write_text as _atomic_write  # noqa: F401
 from ..utils.console import _rich_echo, _rich_info, _rich_warning
+from ..utils.path_security import PathTraversalError, validate_path_segments
 from ..utils.version_checker import check_for_updates
 from ..version import get_build_sha, get_version
 
@@ -136,7 +137,7 @@ def _build_expected_install_paths(declared_deps, lockfile, apm_modules_dir: Path
     (depth > 1 from ``apm.lock``), using ``get_install_path()`` for
     consistency with how packages are actually installed.
     """
-    expected = builtins.set()
+    expected = set()
     for dep in declared_deps:
         install_path = dep.get_install_path(apm_modules_dir)
         try:
@@ -160,7 +161,7 @@ def _build_expected_install_paths(declared_deps, lockfile, apm_modules_dir: Path
 
 def _expand_with_ancestors(
     paths: Iterable[str], installed: Iterable[str] | None = None
-) -> builtins.set[str]:
+) -> set[str]:
     """Expand a set of expected paths to include ancestor prefixes.
 
     Given ``{"owner/repo/.apm/skills/my-skill"}``, returns a set containing
@@ -201,25 +202,28 @@ def _expand_with_ancestors(
     ever grows deeper roots, lift this cap and document the new
     invariant here.
 
-    Traversal guard: any input path containing a ``..`` segment after
-    backslash normalisation is kept in the result as-is (membership
-    check) but produces no ancestors. Backslashes are normalised to
-    forward slashes before splitting so a path like
-    ``owner\\..\\evil`` cannot bypass the check by appearing as a
-    single unsplit token on POSIX hosts.
+    Traversal guard: any input path that fails
+    :func:`apm_cli.utils.path_security.validate_path_segments` (which
+    rejects both ``.`` and ``..`` segments after backslash
+    normalisation) is kept in the result as-is (membership check) but
+    produces no ancestors. Routing through the canonical guard --
+    rather than a hand-rolled ``".." in parts`` check -- ensures
+    single-dot segments (``owner/./repo``) are also caught and keeps
+    the project's path-validation contract centralised.
     """
-    materialized = builtins.list(paths)
-    materialized_set = builtins.set(materialized)
-    expanded = builtins.set(materialized)
-    installed_set = builtins.set(installed) if installed is not None else builtins.set()
+    materialized = list(paths)
+    materialized_set = set(materialized)
+    expanded = set(materialized)
+    installed_set = set(installed) if installed is not None else set()
     for p in materialized:
-        # Normalise backslashes so Windows-style or attacker-crafted
-        # tokens like "owner\\..\\evil" cannot smuggle a traversal
-        # segment past the '..' guard below.
+        try:
+            validate_path_segments(p, context="ancestor expansion")
+        except PathTraversalError:
+            continue
+        # Normalise backslashes so Windows-style tokens split into the
+        # same parts as POSIX inputs for the depth-capped loop below.
         normalised = p.replace("\\", "/")
         parts = normalised.split("/")
-        if ".." in parts:
-            continue
         # Cap at depth 3 -- the ADO install-root depth -- to bound the
         # ancestor-suppression surface (see security contract above).
         for i in range(2, min(4, len(parts))):
@@ -276,15 +280,23 @@ def _standalone_installed_packages(
     (panel finding: forgeable ``apm.yml`` heuristic) while preserving
     behaviour for projects that pre-date the lockfile or have not yet
     re-installed.
+
+    Failure mode: only narrowly-typed shape errors against
+    ``lockfile.dependencies`` (``AttributeError`` / ``TypeError`` /
+    ``KeyError``) are absorbed and degrade to the ``apm.yml``-only
+    fallback. Any other exception (e.g. lockfile parse / I/O failure)
+    propagates so the outer caller can decide whether to log or fail
+    closed -- preventing a corrupted or attacker-crafted lockfile from
+    silently disabling the tamper-evident standalone check.
     """
-    lockfile_keys: builtins.set[str] = builtins.set()
+    lockfile_keys: set[str] = set()
     if lockfile is not None:
         try:
             for dep_key in lockfile.dependencies:
                 if dep_key:
                     lockfile_keys.add(dep_key)
-        except Exception:
-            lockfile_keys = builtins.set()
+        except (AttributeError, TypeError, KeyError):
+            lockfile_keys = set()
     standalone: list = []
     for p in installed:
         if p in lockfile_keys:
