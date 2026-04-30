@@ -169,7 +169,9 @@ class TestDepsListCommand(_DepsCmdBase):
             with patch("apm_cli.core.scope.get_apm_dir", return_value=tmp), _force_rich_fallback():
                 result = self.runner.invoke(cli, ["deps", "list"])
         assert result.exit_code == 0
-        assert "orphaned" in result.output.lower()
+        # Match the specific orphan-warning header (avoids false-positive
+        # match against unrelated 'orphan' substrings in future output).
+        assert "orphaned package(s) found" in result.output
 
     def test_list_version_shown(self):
         """Version from apm.yml should appear in fallback text output."""
