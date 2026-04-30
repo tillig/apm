@@ -12,6 +12,7 @@ from ...constants import APM_DIR, APM_MODULES_DIR, APM_YML_FILENAME, SKILL_MD_FI
 from ...core.command_logger import CommandLogger
 from ...core.target_detection import TargetParamType
 from ...models.apm_package import APMPackage, ValidationResult, validate_apm_package  # noqa: F401
+from .._helpers import _expand_with_ancestors
 from ._utils import (
     _count_package_files,  # noqa: F401
     _count_primitives,
@@ -21,7 +22,6 @@ from ._utils import (
     _get_package_display_info,
     _is_nested_under_package,
 )
-from .._helpers import _expand_with_ancestors
 
 # ---------------------------------------------------------------------------
 # Shared helpers

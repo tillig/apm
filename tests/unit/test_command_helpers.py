@@ -331,9 +331,7 @@ class TestCheckOrphanedPackagesSubdirectoryAncestor:
         (skill_dir / "SKILL.md").write_text("# Skill", encoding="utf-8")
 
         orphaned = _check_orphaned_packages()
-        assert orphaned == [], (
-            f"Parent dir should not be orphaned; got: {orphaned}"
-        )
+        assert orphaned == [], f"Parent dir should not be orphaned; got: {orphaned}"
 
     def test_actual_orphan_still_detected(self, tmp_path, monkeypatch):
         """A truly orphaned package is still reported even with the ancestor fix."""
@@ -389,9 +387,7 @@ class TestCheckOrphanedPackagesSubdirectoryAncestor:
         (instr_dir / "example.instructions.md").write_text("# Instructions", encoding="utf-8")
 
         orphaned = _check_orphaned_packages()
-        assert orphaned == [], (
-            f"Whole-repo package should not be orphaned; got: {orphaned}"
-        )
+        assert orphaned == [], f"Whole-repo package should not be orphaned; got: {orphaned}"
 
     def test_whole_repo_with_unrelated_orphan(self, tmp_path, monkeypatch):
         """Whole-repo dep is fine; an unrelated stale package IS orphaned."""

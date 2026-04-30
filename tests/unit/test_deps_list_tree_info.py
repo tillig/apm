@@ -279,7 +279,6 @@ class TestDepsListCommand(_DepsCmdBase):
         assert result.exit_code == 0
         assert "No insecure APM dependencies installed" in result.output
 
-
     def test_list_subdirectory_parent_not_orphaned(self):
         """Parent dir of a subdirectory virtual package is not flagged orphaned."""
         with self._chdir_tmp() as tmp:
