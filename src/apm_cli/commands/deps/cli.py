@@ -145,14 +145,11 @@ def _resolve_scope_deps(apm_dir, logger, insecure_only=False):
     except Exception:
         pass  # Continue without lockfile if it can't be read
 
-    # Precompute expected paths + ancestors for O(1) orphan checks
-    declared_with_ancestors = _expand_with_ancestors(declared_sources.keys())
-
     # Scan for installed packages in org-namespaced structure
     # Walks the tree to find directories containing apm.yml or SKILL.md,
     # handling GitHub (2-level), ADO (3-level), and subdirectory (4+ level) packages.
-    installed_packages = []
-    orphaned_packages = []
+    # First pass: collect valid candidate paths for ancestor-aware orphan check.
+    scanned_candidates = []
     for candidate in apm_modules_path.rglob("*"):
         if not candidate.is_dir() or candidate.name.startswith("."):
             continue
@@ -163,8 +160,6 @@ def _resolve_scope_deps(apm_dir, logger, insecure_only=False):
         rel_parts = candidate.relative_to(apm_modules_path).parts
         if len(rel_parts) < 2:
             continue
-        org_repo_name = "/".join(rel_parts)
-
         # Skip sub-skills inside .apm/ directories -- they belong to the parent package
         if ".apm" in rel_parts:
             continue
@@ -177,7 +172,14 @@ def _resolve_scope_deps(apm_dir, logger, insecure_only=False):
             and _is_nested_under_package(candidate, apm_modules_path)
         ):
             continue
+        scanned_candidates.append((candidate, "/".join(rel_parts), has_apm_yml, has_skill_md))
 
+    # Precompute expected paths + ancestors for O(1) orphan checks
+    declared_with_ancestors = _expand_with_ancestors(declared_sources.keys())
+
+    installed_packages = []
+    orphaned_packages = []
+    for candidate, org_repo_name, has_apm_yml, _has_skill_md in scanned_candidates:
         try:
             version = "unknown"
             if has_apm_yml:
