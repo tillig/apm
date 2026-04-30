@@ -20,7 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- `apm compile`, `apm prune`, and `apm deps list` no longer falsely flag parent directories of subdirectory virtual packages as orphaned. When a dependency uses dict-form (`git:` + `path:`) pointing at a nested path (e.g., `.apm/skills/skill-name`), the intermediate `owner/repo/` directory is now recognized as an ancestor of the expected install path rather than an orphaned package. (#1050)
+- **Orphan detection improved** -- Orphan detection performed by `apm prune`, `apm deps list`, and `apm compile` no longer incorrectly flags the parent directory of a skill installed from a subdirectory path (e.g., `.apm/skills/skill-name`). The folder is now correctly recognized as part of the install tree. (#1050)
 
 ## [0.11.0] - 2026-04-29
 
