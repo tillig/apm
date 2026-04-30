@@ -294,7 +294,7 @@ class TestExpandWithAncestors:
 
 
 # ---------------------------------------------------------------------------
-# _check_orphaned_packages — subdirectory ancestor false-positive fix
+# _check_orphaned_packages -- subdirectory ancestor false-positive fix
 # ---------------------------------------------------------------------------
 
 
