@@ -191,7 +191,9 @@ class TestPreflightGenericHostAllowsCredentialHelpers:
         with pytest.raises(AuthenticationError) as exc_info:
             _preflight_auth_check(ctx, resolver, verbose=False)
 
-        assert "ghes.corp.example.com" in str(exc_info.value)
+        assert str(exc_info.value).startswith(
+            "Authentication failed for ghes.corp.example.com"
+        )
 
     @patch("subprocess.run")
     def test_ado_host_retains_credential_blocking_env(self, mock_run):
